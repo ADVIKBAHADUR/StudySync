@@ -1,0 +1,1044 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Semester Project Dashboard</title>
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="config.js"></script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo, useEffect } = React;
+
+        const Calendar = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>;
+        const CheckSquare = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>;
+        const Clock = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
+        const AlertCircle = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
+        const Plus = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>;
+        const ChevronDown = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>;
+        const ChevronRight = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>;
+        const Edit = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>;
+        const Trash = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>;
+        const Settings = () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>;
+
+        // Helper function to format dates
+        const formatDate = (dateStr) => {
+            if (!dateStr) return '';
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        };
+
+        // Helper function to format date for input fields
+        const formatDateForInput = (dateStr) => {
+            if (!dateStr) return '';
+            const date = new Date(dateStr);
+            return date.toISOString().split('T')[0];
+        };
+
+        // Google Sheets API Helper Functions
+        const SheetsAPI = {
+            async fetchTasks(sheetId, apiKey, appsScriptUrl) {
+                // If Apps Script URL is provided, use it instead
+                if (appsScriptUrl) {
+                    try {
+                        const response = await fetch(appsScriptUrl + '?action=read');
+                        if (!response.ok) throw new Error('Failed to fetch from Apps Script');
+                        const data = await response.json();
+                        return data.map(row => ({
+                            id: parseInt(row.id) || 0,
+                            project: row.project || '',
+                            name: row.name || '',
+                            startDate: row.startDate || '',
+                            endDate: row.endDate || '',
+                            hoursNeeded: parseInt(row.hoursNeeded) || 0,
+                            completed: row.completed === true || row.completed === 'TRUE' || row.completed === 'true',
+                            parent: null
+                        }));
+                    } catch (error) {
+                        console.error('Error with Apps Script:', error);
+                        throw error;
+                    }
+                }
+                
+                // Fallback to read-only API
+                try {
+                    const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/Sheet1!A2:G?key=${apiKey}`;
+                    console.log('Fetching from:', url);
+                    
+                    const response = await fetch(url);
+                    
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        console.error('API Error:', errorText);
+                        throw new Error(`API Error: ${response.status} - ${errorText}`);
+                    }
+                    
+                    const data = await response.json();
+                    console.log('Fetched data:', data);
+                    
+                    if (!data.values || data.values.length === 0) return [];
+                    
+                    return data.values.map(row => ({
+                        id: parseInt(row[0]) || 0,
+                        project: row[1] || '',
+                        name: row[2] || '',
+                        startDate: row[3] || '',
+                        endDate: row[4] || '',
+                        hoursNeeded: parseInt(row[5]) || 0,
+                        completed: row[6] === 'TRUE' || row[6] === 'true',
+                        parent: null
+                    }));
+                } catch (error) {
+                    console.error('Error fetching tasks:', error);
+                    throw error;
+                }
+            },
+
+            async saveTasks(sheetId, apiKey, appsScriptUrl, tasks) {
+                // If Apps Script URL is provided, use it for writing
+                if (appsScriptUrl) {
+                    try {
+                        const response = await fetch(appsScriptUrl, {
+                            method: 'POST',
+                            mode: 'no-cors',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ action: 'write', tasks })
+                        });
+                        console.log('Saved to Apps Script');
+                        return true;
+                    } catch (error) {
+                        console.error('Error saving via Apps Script:', error);
+                        return false;
+                    }
+                }
+                
+                // API key can't write - return false
+                console.warn('Cannot write with API key only - need Apps Script URL');
+                return false;
+            }
+        };
+
+        const ProjectDashboard = () => {
+            const [currentView, setCurrentView] = useState('overview');
+            const [expandedProjects, setExpandedProjects] = useState({});
+            const [tasks, setTasks] = useState([]);
+            const [showAddTask, setShowAddTask] = useState(false);
+            const [editingTask, setEditingTask] = useState(null);
+            const [newTask, setNewTask] = useState({
+                project: '',
+                name: '',
+                startDate: '',
+                endDate: '',
+                hoursNeeded: 0
+            });
+            const [showSettings, setShowSettings] = useState(false);
+            const [config, setConfig] = useState(() => {
+                const saved = localStorage.getItem('sheetsConfig');
+                if (saved) return JSON.parse(saved);
+                
+                // Try to load from config.js, fallback to empty
+                if (typeof CONFIG !== 'undefined') {
+                    return CONFIG;
+                }
+                
+                return { sheetId: '', apiKey: '', appsScriptUrl: '' };
+            });
+            const [isLoading, setIsLoading] = useState(false);
+            const [syncStatus, setSyncStatus] = useState('');
+
+            // Load tasks from Google Sheets on mount
+            useEffect(() => {
+                if (config.sheetId && config.apiKey) {
+                    loadTasksFromSheets();
+                }
+            }, []);
+
+            // Auto-sync tasks to Google Sheets whenever they change
+            useEffect(() => {
+                if (config.sheetId && config.apiKey && tasks.length > 0) {
+                    saveTasksToSheets();
+                }
+            }, [tasks]);
+
+            const loadTasksFromSheets = async () => {
+                setIsLoading(true);
+                setSyncStatus('Loading from Google Sheets...');
+                try {
+                    const loadedTasks = await SheetsAPI.fetchTasks(config.sheetId, config.apiKey, config.appsScriptUrl);
+                    setTasks(loadedTasks);
+                    setSyncStatus('✓ Loaded from Google Sheets');
+                } catch (error) {
+                    setSyncStatus('✗ Error: ' + error.message);
+                    console.error('Load error:', error);
+                    
+                    // Show more helpful error message
+                    if (error.message.includes('403') || error.message.includes('401')) {
+                        alert('Access Denied: Make sure your Google Sheet is shared as "Anyone with the link can VIEW" and your API key has Google Sheets API enabled.');
+                    } else if (error.message.includes('404')) {
+                        alert('Sheet not found: Check that your Sheet ID is correct and the sheet name is "Sheet1".');
+                    } else {
+                        alert('Error loading from Google Sheets. Check the browser console (F12) for details.\n\nMake sure:\n1. Sheet is shared publicly\n2. API key is valid\n3. Google Sheets API is enabled');
+                    }
+                } finally {
+                    setIsLoading(false);
+                    setTimeout(() => setSyncStatus(''), 5000);
+                }
+            };
+
+            const saveTasksToSheets = async () => {
+                if (!config.sheetId || !config.apiKey) return;
+                
+                try {
+                    const success = await SheetsAPI.saveTasks(config.sheetId, config.apiKey, config.appsScriptUrl, tasks);
+                    if (success) {
+                        setSyncStatus('✓ Synced');
+                        setTimeout(() => setSyncStatus(''), 2000);
+                    } else if (!config.appsScriptUrl) {
+                        setSyncStatus('⚠️ Read-only (need Apps Script for auto-save)');
+                        setTimeout(() => setSyncStatus(''), 4000);
+                    }
+                } catch (error) {
+                    setSyncStatus('✗ Sync failed');
+                    console.error(error);
+                    setTimeout(() => setSyncStatus(''), 3000);
+                }
+            };
+
+            const saveConfig = () => {
+                if (!config.sheetId || !config.apiKey) {
+                    alert('Please enter both Sheet ID and API Key');
+                    return;
+                }
+                localStorage.setItem('sheetsConfig', JSON.stringify(config));
+                setShowSettings(false);
+                loadTasksFromSheets();
+            };
+
+            const exportToSheetFormat = () => {
+                const rows = tasks.map(task => 
+                    `${task.id}\t${task.project}\t${task.name}\t${task.startDate}\t${task.endDate}\t${task.hoursNeeded}\t${task.completed}`
+                ).join('\n');
+                
+                navigator.clipboard.writeText(rows).then(() => {
+                    alert('✓ Data copied to clipboard!\n\nNow:\n1. Open your Google Sheet\n2. Click cell A2\n3. Press Ctrl+V to paste\n\nAll your tasks will be imported.');
+                });
+            };
+
+            const setupAppsScript = () => {
+                const script = `function doGet(e) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Sheet1');
+  const data = sheet.getRange('A2:G' + sheet.getLastRow()).getValues();
+  
+  const tasks = data.filter(row => row[0]).map(row => ({
+    id: row[0],
+    project: row[1],
+    name: row[2],
+    startDate: row[3],
+    endDate: row[4],
+    hoursNeeded: row[5],
+    completed: row[6]
+  }));
+  
+  return ContentService.createTextOutput(JSON.stringify(tasks))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function doPost(e) {
+  try {
+    const data = JSON.parse(e.postData.contents);
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Sheet1');
+    
+    // Clear existing data
+    sheet.getRange('A2:G' + sheet.getLastRow()).clearContent();
+    
+    // Write new data
+    const values = data.tasks.map(task => [
+      task.id,
+      task.project,
+      task.name,
+      task.startDate,
+      task.endDate,
+      task.hoursNeeded,
+      task.completed
+    ]);
+    
+    if (values.length > 0) {
+      sheet.getRange(2, 1, values.length, 7).setValues(values);
+    }
+    
+    return ContentService.createTextOutput(JSON.stringify({success: true}))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({success: false, error: error.toString()}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}`;
+                
+                navigator.clipboard.writeText(script).then(() => {
+                    alert('📋 Apps Script copied to clipboard!\n\nSetup steps:\n\n1. Open your Google Sheet\n2. Click Extensions → Apps Script\n3. Delete any existing code\n4. Paste the script (Ctrl+V)\n5. Click Save (disk icon)\n6. Click Deploy → New deployment\n7. Click "Select type" → Web app\n8. Set "Who has access" to "Anyone"\n9. Click Deploy\n10. Copy the Web app URL\n11. Paste it in Settings as "Apps Script URL"\n\nThen your dashboard will auto-sync!');
+                });
+            };
+
+            const toggleTask = (id) => {
+                setTasks(tasks.map(t => t.id === id ? { ...t, completed: !t.completed } : t));
+            };
+
+            const deleteTask = (id) => {
+                if (confirm('Are you sure you want to delete this task?')) {
+                    setTasks(tasks.filter(t => t.id !== id));
+                }
+            };
+
+            const addTask = () => {
+                if (!newTask.name || !newTask.startDate || !newTask.endDate) {
+                    alert('Please fill in all required fields');
+                    return;
+                }
+                const task = {
+                    id: Math.max(...tasks.map(t => t.id), 0) + 1,
+                    ...newTask,
+                    hoursNeeded: Number(newTask.hoursNeeded),
+                    completed: false,
+                    parent: null
+                };
+                setTasks([...tasks, task]);
+                setNewTask({ project: '', name: '', startDate: '', endDate: '', hoursNeeded: 0 });
+                setShowAddTask(false);
+            };
+
+            const updateTask = () => {
+                if (!editingTask.name || !editingTask.startDate || !editingTask.endDate) {
+                    alert('Please fill in all required fields');
+                    return;
+                }
+                setTasks(tasks.map(t => t.id === editingTask.id ? { ...editingTask, hoursNeeded: Number(editingTask.hoursNeeded) } : t));
+                setEditingTask(null);
+            };
+
+            const toggleProject = (project) => {
+                setExpandedProjects(prev => ({ ...prev, [project]: !prev[project] }));
+            };
+
+            // Get unique projects from tasks
+            const uniqueProjects = useMemo(() => {
+                return [...new Set(tasks.map(t => t.project))].filter(Boolean);
+            }, [tasks]);
+
+            // Generate colors for projects dynamically
+            const projectColorOptions = ['bg-purple-500', 'bg-blue-500', 'bg-green-500', 'bg-red-500', 'bg-yellow-500', 'bg-pink-500', 'bg-indigo-500', 'bg-teal-500'];
+            const projectBorderColorOptions = ['border-purple-500', 'border-blue-500', 'border-green-500', 'border-red-500', 'border-yellow-500', 'border-pink-500', 'border-indigo-500', 'border-teal-500'];
+            
+            const projectColors = useMemo(() => {
+                const colors = {};
+                uniqueProjects.forEach((project, idx) => {
+                    colors[project] = projectColorOptions[idx % projectColorOptions.length];
+                });
+                return colors;
+            }, [uniqueProjects]);
+
+            const projectBorderColors = useMemo(() => {
+                const colors = {};
+                uniqueProjects.forEach((project, idx) => {
+                    colors[project] = projectBorderColorOptions[idx % projectBorderColorOptions.length];
+                });
+                return colors;
+            }, [uniqueProjects]);
+
+            const getProjectStats = () => {
+                const stats = {};
+                uniqueProjects.forEach(proj => {
+                    const projTasks = tasks.filter(t => t.project === proj);
+                    const completed = projTasks.filter(t => t.completed).length;
+                    const total = projTasks.length;
+                    const totalHours = projTasks.reduce((sum, t) => sum + t.hoursNeeded, 0);
+                    const completedHours = projTasks.filter(t => t.completed).reduce((sum, t) => sum + t.hoursNeeded, 0);
+                    stats[proj] = { completed, total, totalHours, completedHours, percentage: total > 0 ? (completed / total * 100) : 0 };
+                });
+                return stats;
+            };
+
+            const getUpcomingTasks = () => {
+                const today = new Date();
+                const upcoming = tasks
+                    .filter(t => !t.completed && new Date(t.startDate) >= today)
+                    .sort((a, b) => new Date(a.startDate) - new Date(b.startDate))
+                    .slice(0, 10);
+                return upcoming;
+            };
+
+            const getTodaysTasks = () => {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                
+                return tasks.filter(t => {
+                    const start = new Date(t.startDate);
+                    const end = new Date(t.endDate);
+                    start.setHours(0, 0, 0, 0);
+                    end.setHours(0, 0, 0, 0);
+                    
+                    return today >= start && today <= end;
+                }).sort((a, b) => {
+                    if (a.completed === b.completed) return 0;
+                    return a.completed ? 1 : -1;
+                });
+            };
+
+            const getNext14Days = () => {
+                const days = [];
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                
+                for (let i = 1; i <= 14; i++) {
+                    const date = new Date(today);
+                    date.setDate(today.getDate() + i);
+                    
+                    const dayTasks = tasks.filter(t => {
+                        const start = new Date(t.startDate);
+                        const end = new Date(t.endDate);
+                        start.setHours(0, 0, 0, 0);
+                        end.setHours(0, 0, 0, 0);
+                        
+                        return date >= start && date <= end;
+                    });
+                    
+                    days.push({
+                        date: new Date(date),
+                        tasks: dayTasks.sort((a, b) => {
+                            if (a.completed === b.completed) return 0;
+                            return a.completed ? 1 : -1;
+                        })
+                    });
+                }
+                
+                return days;
+            };
+
+            const getDaysUntil = (dateStr) => {
+                const today = new Date();
+                const target = new Date(dateStr);
+                const days = Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+                return days;
+            };
+
+            const stats = getProjectStats();
+            const upcomingTasks = getUpcomingTasks();
+            const todaysTasks = getTodaysTasks();
+            const next14Days = getNext14Days();
+
+            const groupedTasks = useMemo(() => {
+                const groups = {};
+                uniqueProjects.forEach(project => {
+                    groups[project] = [];
+                });
+                tasks.forEach(task => {
+                    if (task.project && groups[task.project]) {
+                        groups[task.project].push(task);
+                    }
+                });
+                return groups;
+            }, [tasks, uniqueProjects]);
+
+            return (
+                <div className="min-h-screen bg-gray-50 p-6">
+                    <div className="max-w-7xl mx-auto">
+                        <div className="mb-6 flex justify-between items-center">
+                            <div>
+                                <h1 className="text-3xl font-bold text-gray-900 mb-2">Semester Project Dashboard</h1>
+                                <p className="text-gray-600">Track your thesis, QC, and AI module deliverables</p>
+                                {syncStatus && (
+                                    <p className={`text-sm mt-1 ${syncStatus.includes('✓') ? 'text-green-600' : 'text-red-600'}`}>
+                                        {syncStatus}
+                                    </p>
+                                )}
+                            </div>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => setShowSettings(true)}
+                                    className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                                    title="Configure Google Sheets"
+                                >
+                                    <Settings />
+                                    Settings
+                                </button>
+                                <button
+                                    onClick={() => setShowAddTask(true)}
+                                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                >
+                                    <Plus />
+                                    Add Task
+                                </button>
+                            </div>
+                        </div>
+
+                        {showSettings && (
+                            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                                <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4">
+                                    <h3 className="text-xl font-semibold mb-4">Google Sheets Configuration</h3>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Google Sheet ID</label>
+                                            <input
+                                                type="text"
+                                                value={config.sheetId}
+                                                onChange={(e) => setConfig({ ...config, sheetId: e.target.value })}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                                                placeholder="1a2B3c4D5e6F7g8H9i0J..."
+                                            />
+                                            <p className="text-xs text-gray-500 mt-1">
+                                                From your Google Sheets URL: docs.google.com/spreadsheets/d/<strong>SHEET_ID</strong>/edit
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">API Key</label>
+                                            <input
+                                                type="password"
+                                                value={config.apiKey}
+                                                onChange={(e) => setConfig({ ...config, apiKey: e.target.value })}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                                                placeholder="AIzaSyC1234567890abcdefghijk..."
+                                            />
+                                            <p className="text-xs text-gray-500 mt-1">
+                                                Your Google Cloud API key with Google Sheets API enabled
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Apps Script URL (Optional - for auto-sync)</label>
+                                            <input
+                                                type="text"
+                                                value={config.appsScriptUrl}
+                                                onChange={(e) => setConfig({ ...config, appsScriptUrl: e.target.value })}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                                                placeholder="https://script.google.com/macros/s/..."
+                                            />
+                                            <p className="text-xs text-gray-500 mt-1">
+                                                Click "Enable Auto-Sync" button above to get the script code
+                                            </p>
+                                        </div>
+                                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                            <h4 className="font-semibold text-blue-900 mb-2">Setup Instructions:</h4>
+                                            <ol className="text-sm text-blue-800 space-y-1 list-decimal list-inside">
+                                                <li>Create a Google Sheet with columns: id, project, name, startDate, endDate, hoursNeeded, completed</li>
+                                                <li>Share the sheet with "Anyone with the link" (Viewer permission)</li>
+                                                <li>Extract the Sheet ID from the URL</li>
+                                                <li>Create a Google Cloud API key with Google Sheets API enabled</li>
+                                                <li>Enter both values above and click Connect</li>
+                                            </ol>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-3 mt-6">
+                                        <button
+                                            onClick={saveConfig}
+                                            disabled={isLoading}
+                                            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400"
+                                        >
+                                            {isLoading ? 'Connecting...' : 'Connect to Google Sheets'}
+                                        </button>
+                                        <button
+                                            onClick={() => setShowSettings(false)}
+                                            className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {showAddTask && (
+                            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                                <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+                                    <h3 className="text-xl font-semibold mb-4">Add New Task</h3>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Project</label>
+                                            <select
+                                                value={newTask.project}
+                                                onChange={(e) => setNewTask({ ...newTask, project: e.target.value })}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            >
+                                                <option value="">Select Project</option>
+                                                {uniqueProjects.map(proj => (
+                                                    <option key={proj} value={proj}>{proj}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Task Name *</label>
+                                            <input
+                                                type="text"
+                                                value={newTask.name}
+                                                onChange={(e) => setNewTask({ ...newTask, name: e.target.value })}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                placeholder="e.g., Write chapter 1"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Start Date *</label>
+                                            <input
+                                                type="date"
+                                                value={formatDateForInput(newTask.startDate)}
+                                                onChange={(e) => setNewTask({ ...newTask, startDate: e.target.value })}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">End Date *</label>
+                                            <input
+                                                type="date"
+                                                value={formatDateForInput(newTask.endDate)}
+                                                onChange={(e) => setNewTask({ ...newTask, endDate: e.target.value })}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Hours Needed</label>
+                                            <input
+                                                type="number"
+                                                value={newTask.hoursNeeded}
+                                                onChange={(e) => setNewTask({ ...newTask, hoursNeeded: e.target.value })}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                min="0"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-3 mt-6">
+                                        <button
+                                            onClick={addTask}
+                                            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                        >
+                                            Add Task
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setShowAddTask(false);
+                                                setNewTask({ project: '', name: '', startDate: '', endDate: '', hoursNeeded: 0 });
+                                            }}
+                                            className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {editingTask && (
+                            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                                <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+                                    <h3 className="text-xl font-semibold mb-4">Edit Task</h3>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Project</label>
+                                            <select
+                                                value={editingTask.project}
+                                                onChange={(e) => setEditingTask({ ...editingTask, project: e.target.value })}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            >
+                                                <option value="">Select Project</option>
+                                                {uniqueProjects.map(proj => (
+                                                    <option key={proj} value={proj}>{proj}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Task Name *</label>
+                                            <input
+                                                type="text"
+                                                value={editingTask.name}
+                                                onChange={(e) => setEditingTask({ ...editingTask, name: e.target.value })}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Start Date *</label>
+                                            <input
+                                                type="date"
+                                                value={formatDateForInput(editingTask.startDate)}
+                                                onChange={(e) => setEditingTask({ ...editingTask, startDate: e.target.value })}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">End Date *</label>
+                                            <input
+                                                type="date"
+                                                value={formatDateForInput(editingTask.endDate)}
+                                                onChange={(e) => setEditingTask({ ...editingTask, endDate: e.target.value })}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Hours Needed</label>
+                                            <input
+                                                type="number"
+                                                value={editingTask.hoursNeeded}
+                                                onChange={(e) => setEditingTask({ ...editingTask, hoursNeeded: e.target.value })}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                min="0"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-3 mt-6">
+                                        <button
+                                            onClick={updateTask}
+                                            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                        >
+                                            Update Task
+                                        </button>
+                                        <button
+                                            onClick={() => setEditingTask(null)}
+                                            className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="flex gap-2 mb-6">
+                            <button
+                                onClick={() => setCurrentView('overview')}
+                                className={`px-4 py-2 rounded-lg font-medium transition-colors ${currentView === 'overview' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}
+                            >
+                                Overview
+                            </button>
+                            <button
+                                onClick={() => setCurrentView('timeline')}
+                                className={`px-4 py-2 rounded-lg font-medium transition-colors ${currentView === 'timeline' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}
+                            >
+                                Timeline
+                            </button>
+                            <button
+                                onClick={() => setCurrentView('tasks')}
+                                className={`px-4 py-2 rounded-lg font-medium transition-colors ${currentView === 'tasks' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100'}`}
+                            >
+                                All Tasks
+                            </button>
+                        </div>
+
+                        {currentView === 'overview' && (
+                            <div className="space-y-6">
+                                <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg shadow-lg p-6 text-white">
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <CheckSquare className="w-6 h-6" />
+                                        <h2 className="text-2xl font-bold">Today's Tasks</h2>
+                                        <span className="ml-auto text-sm bg-white bg-opacity-20 px-3 py-1 rounded-full">
+                                            {todaysTasks.filter(t => !t.completed).length} active
+                                        </span>
+                                    </div>
+                                    {todaysTasks.length > 0 ? (
+                                        <div className="space-y-3">
+                                            {todaysTasks.map(task => (
+                                                <div 
+                                                    key={task.id} 
+                                                    className={`flex items-center gap-4 p-4 rounded-lg transition-all ${
+                                                        task.completed 
+                                                            ? 'bg-white bg-opacity-10' 
+                                                            : 'bg-white bg-opacity-20 hover:bg-opacity-30'
+                                                    }`}
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={task.completed}
+                                                        onChange={() => toggleTask(task.id)}
+                                                        className="w-5 h-5 rounded border-2 border-white cursor-pointer"
+                                                    />
+                                                    <div className="flex-1">
+                                                        <p className={`font-semibold ${task.completed ? 'line-through opacity-75' : ''}`}>
+                                                            {task.name}
+                                                        </p>
+                                                        <p className="text-sm opacity-90">{task.project}</p>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 text-sm">
+                                                        <Clock />
+                                                        <span>{task.hoursNeeded}h</span>
+                                                    </div>
+                                                    <div className={`w-3 h-3 rounded-full ${projectColors[task.project]}`}></div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="text-center py-8 bg-white bg-opacity-10 rounded-lg">
+                                            <p className="text-lg">🎉 No tasks scheduled for today!</p>
+                                            <p className="text-sm opacity-75 mt-2">Enjoy your free time or get ahead on upcoming tasks</p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    {Object.entries(stats).map(([project, data]) => (
+                                        <div key={project} className="bg-white rounded-lg shadow p-6">
+                                            <div className="flex items-center justify-between mb-4">
+                                                <h3 className="text-lg font-semibold text-gray-900">{project}</h3>
+                                                <div className={`w-3 h-3 rounded-full ${projectColors[project]}`}></div>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <div className="flex justify-between text-sm">
+                                                    <span className="text-gray-600">Progress</span>
+                                                    <span className="font-medium">{data.completed}/{data.total} tasks</span>
+                                                </div>
+                                                <div className="w-full bg-gray-200 rounded-full h-2">
+                                                    <div
+                                                        className={`h-2 rounded-full ${projectColors[project]}`}
+                                                        style={{ width: `${data.percentage}%` }}
+                                                    ></div>
+                                                </div>
+                                                <div className="flex justify-between text-sm mt-3">
+                                                    <span className="text-gray-600">Hours</span>
+                                                    <span className="font-medium">{data.completedHours}/{data.totalHours}h</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <div className="bg-white rounded-lg shadow p-6">
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <Calendar className="w-5 h-5 text-blue-500" />
+                                        <h2 className="text-xl font-semibold text-gray-900">Looking Ahead...</h2>
+                                    </div>
+                                    <div className="space-y-4 max-h-[600px] overflow-y-auto">
+                                        {next14Days.length > 0 ? (
+                                            next14Days.map((day, idx) => {
+                                                const dayName = day.date.toLocaleDateString('en-US', { weekday: 'long' });
+                                                const dateStr = day.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                                                const isTomorrow = idx === 0;
+                                                
+                                                // Determine border color based on dominant project
+                                                let borderColor = 'border-gray-300';
+                                                if (day.tasks.length > 0) {
+                                                    const projectCounts = {};
+                                                    day.tasks.forEach(t => {
+                                                        projectCounts[t.project] = (projectCounts[t.project] || 0) + 1;
+                                                    });
+                                                    const dominantProject = Object.keys(projectCounts).reduce((a, b) => 
+                                                        projectCounts[a] > projectCounts[b] ? a : b
+                                                    );
+                                                    borderColor = projectBorderColors[dominantProject];
+                                                }
+                                                
+                                                return (
+                                                    <div key={idx} className={`border-l-4 ${borderColor} pl-4 py-2`}>
+                                                        <div className="flex items-center gap-2 mb-2">
+                                                            <h3 className="font-semibold text-gray-900">
+                                                                {isTomorrow ? 'Tomorrow' : dayName}, {dateStr}
+                                                            </h3>
+                                                            {day.tasks.length > 0 && (
+                                                                <span className="text-xs text-gray-500">
+                                                                    ({day.tasks.filter(t => !t.completed).length} tasks)
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        {day.tasks.length > 0 ? (
+                                                            <div className="space-y-2">
+                                                                {day.tasks.map(task => (
+                                                                    <div 
+                                                                        key={task.id} 
+                                                                        className="flex items-center justify-between p-2 bg-gray-50 rounded hover:bg-gray-100 transition-colors"
+                                                                    >
+                                                                        <div className="flex items-center gap-3 flex-1">
+                                                                            <input
+                                                                                type="checkbox"
+                                                                                checked={task.completed}
+                                                                                onChange={() => toggleTask(task.id)}
+                                                                                className="w-4 h-4 rounded border-gray-300"
+                                                                            />
+                                                                            <div className={`w-2 h-2 rounded-full ${projectColors[task.project]}`}></div>
+                                                                            <div className="flex-1">
+                                                                                <p className={`text-sm font-medium ${task.completed ? 'line-through text-gray-500' : 'text-gray-900'}`}>
+                                                                                    {task.name}
+                                                                                </p>
+                                                                                <p className="text-xs text-gray-600">{task.project}</p>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="flex items-center gap-1 text-xs text-gray-600">
+                                                                            <Clock />
+                                                                            <span>{task.hoursNeeded}h</span>
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        ) : (
+                                                            <p className="text-sm text-gray-500 italic">Nothing scheduled</p>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })
+                                        ) : (
+                                            <p className="text-center text-gray-500 py-8">No tasks scheduled for the next 14 days</p>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="bg-white rounded-lg shadow p-6">
+                                    <h2 className="text-xl font-semibold text-gray-900 mb-4">Key Deadlines</h2>
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between p-3 bg-blue-50 rounded-lg">
+                                            <span className="font-medium">QC Assignment 3</span>
+                                            <span className="text-blue-700">Jan 30, 2026</span>
+                                        </div>
+                                        <div className="flex justify-between p-3 bg-blue-50 rounded-lg">
+                                            <span className="font-medium">QC Assignment 4</span>
+                                            <span className="text-blue-700">Feb 9, 2026</span>
+                                        </div>
+                                        <div className="flex justify-between p-3 bg-green-50 rounded-lg">
+                                            <span className="font-medium">AI Individual Assignment 1</span>
+                                            <span className="text-green-700">Feb 23, 2026</span>
+                                        </div>
+                                        <div className="flex justify-between p-3 bg-blue-50 rounded-lg">
+                                            <span className="font-medium">QC Mini Project Presentation</span>
+                                            <span className="text-blue-700">Mar 2, 2026</span>
+                                        </div>
+                                        <div className="flex justify-between p-3 bg-blue-50 rounded-lg">
+                                            <span className="font-medium">QC Mini Project Report</span>
+                                            <span className="text-blue-700">Mar 13, 2026</span>
+                                        </div>
+                                        <div className="flex justify-between p-3 bg-green-50 rounded-lg">
+                                            <span className="font-medium">AI Individual Assignment 2</span>
+                                            <span className="text-green-700">Mar 30, 2026</span>
+                                        </div>
+                                        <div className="flex justify-between p-3 bg-green-50 rounded-lg">
+                                            <span className="font-medium">AI Group Assignment</span>
+                                            <span className="text-green-700">Apr 6, 2026</span>
+                                        </div>
+                                        <div className="flex justify-between p-3 bg-purple-50 rounded-lg">
+                                            <span className="font-medium">Thesis</span>
+                                            <span className="text-purple-700">Apr 10, 2026</span>
+                                        </div>
+                                        <div className="flex justify-between p-3 bg-blue-50 rounded-lg">
+                                            <span className="font-medium">QC Exam</span>
+                                            <span className="text-blue-700">~Apr 27, 2026</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {currentView === 'timeline' && (
+                            <div className="bg-white rounded-lg shadow p-6">
+                                <h2 className="text-xl font-semibold text-gray-900 mb-6">Gantt Chart View</h2>
+                                <div className="overflow-x-auto">
+                                    <div className="min-w-[1200px]">
+                                        <div className="flex border-b pb-2 mb-4">
+                                            <div className="w-64 font-semibold text-gray-700">Task</div>
+                                            <div className="flex-1 flex">
+                                                <div className="flex-1 text-center text-sm font-medium text-gray-600 border-r">Jan</div>
+                                                <div className="flex-1 text-center text-sm font-medium text-gray-600 border-r">Feb</div>
+                                                <div className="flex-1 text-center text-sm font-medium text-gray-600 border-r">Mar</div>
+                                                <div className="flex-1 text-center text-sm font-medium text-gray-600">Apr</div>
+                                            </div>
+                                        </div>
+                                        {tasks.map(task => {
+                                            const start = new Date(task.startDate);
+                                            const end = new Date(task.endDate);
+                                            const yearStart = new Date('2026-01-20');
+                                            const yearEnd = new Date('2026-05-01');
+                                            const totalDays = (yearEnd - yearStart) / (1000 * 60 * 60 * 24);
+                                            const startOffset = ((start - yearStart) / (1000 * 60 * 60 * 24)) / totalDays * 100;
+                                            const duration = ((end - start) / (1000 * 60 * 60 * 24) + 1) / totalDays * 100;
+                                            
+                                            return (
+                                                <div key={task.id} className="flex items-center mb-2">
+                                                    <div className="w-64 text-sm text-gray-700 truncate pr-2">{task.name}</div>
+                                                    <div className="flex-1 relative h-8">
+                                                        <div
+                                                            className={`absolute h-6 rounded ${projectColors[task.project]} ${task.completed ? 'opacity-50' : 'opacity-90'}`}
+                                                            style={{
+                                                                left: `${Math.max(0, startOffset)}%`,
+                                                                width: `${Math.min(100 - startOffset, duration)}%`
+                                                            }}
+                                                        >
+                                                            <div className="text-xs text-white px-2 py-1 truncate">{task.hoursNeeded}h</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {currentView === 'tasks' && (
+                            <div className="space-y-4">
+                                {Object.entries(groupedTasks).map(([project, projectTasks]) => (
+                                    <div key={project} className="bg-white rounded-lg shadow">
+                                        <button
+                                            onClick={() => toggleProject(project)}
+                                            className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                {expandedProjects[project] ? <ChevronDown /> : <ChevronRight />}
+                                                <div className={`w-3 h-3 rounded-full ${projectColors[project]}`}></div>
+                                                <h3 className="text-lg font-semibold text-gray-900">{project}</h3>
+                                                <span className="text-sm text-gray-600">({projectTasks.filter(t => t.completed).length}/{projectTasks.length})</span>
+                                            </div>
+                                            <div className="text-sm text-gray-600">
+                                                {projectTasks.reduce((sum, t) => sum + t.hoursNeeded, 0)} hours total
+                                            </div>
+                                        </button>
+                                        {expandedProjects[project] && (
+                                            <div className="px-4 pb-4 space-y-2">
+                                                {projectTasks.map(task => (
+                                                    <div
+                                                        key={task.id}
+                                                        className={`flex items-center justify-between p-3 rounded-lg border ${task.completed ? 'bg-gray-50 border-gray-200' : 'bg-white border-gray-300'}`}
+                                                    >
+                                                        <div className="flex items-center gap-3 flex-1">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={task.completed}
+                                                                onChange={() => toggleTask(task.id)}
+                                                                className="w-4 h-4 rounded border-gray-300"
+                                                            />
+                                                            <div className="flex-1">
+                                                                <p className={`font-medium ${task.completed ? 'text-gray-500 line-through' : 'text-gray-900'}`}>
+                                                                    {task.name}
+                                                                </p>
+                                                                <p className="text-sm text-gray-600">
+                                                                    {formatDate(task.startDate)} → {formatDate(task.endDate)}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="flex items-center gap-1 text-sm text-gray-600">
+                                                                <Clock />
+                                                                <span>{task.hoursNeeded}h</span>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => setEditingTask(task)}
+                                                                className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                                            >
+                                                                <Edit />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => deleteTask(task.id)}
+                                                                className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors"
+                                                            >
+                                                                <Trash />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<ProjectDashboard />, document.getElementById('root'));
+    </script>
+</body>
+</html
