@@ -58,6 +58,7 @@
                             endDate: row.endDate || '',
                             hoursNeeded: parseInt(row.hoursNeeded) || 0,
                             completed: row.completed === true || row.completed === 'TRUE' || row.completed === 'true',
+                            deadline: row.deadline || '',
                             parent: null
                         }));
                     } catch (error) {
@@ -92,6 +93,7 @@
                         endDate: row[4] || '',
                         hoursNeeded: parseInt(row[5]) || 0,
                         completed: row[6] === 'TRUE' || row[6] === 'true',
+                        deadline: row[7] || '',
                         parent: null
                     }));
                 } catch (error) {
@@ -130,6 +132,7 @@
             const [tasks, setTasks] = useState([]);
             const [showAddTask, setShowAddTask] = useState(false);
             const [editingTask, setEditingTask] = useState(null);
+            const [sortByDate, setSortByDate] = useState(false);
             const [newTask, setNewTask] = useState({
                 project: '',
                 name: '',
@@ -151,11 +154,15 @@
             });
             const [isLoading, setIsLoading] = useState(false);
             const [syncStatus, setSyncStatus] = useState('');
+            const [deadlines, setDeadlines] = useState([]);
+            const [showAddDeadline, setShowAddDeadline] = useState(false);
+            const [newDeadline, setNewDeadline] = useState({ name: '', date: '', project: '' });
 
-            // Load tasks from Google Sheets on mount
+            // Load tasks and deadlines from Google Sheets on mount
             useEffect(() => {
                 if (config.sheetId && config.apiKey) {
                     loadTasksFromSheets();
+                    loadDeadlinesFromSheets();
                 }
             }, []);
 
@@ -189,6 +196,77 @@
                     setIsLoading(false);
                     setTimeout(() => setSyncStatus(''), 5000);
                 }
+            };
+
+            const loadDeadlinesFromSheets = async () => {
+                try {
+                    const url = `https://sheets.googleapis.com/v4/spreadsheets/${config.sheetId}/values/Deadlines!A2:C?key=${config.apiKey}`;
+                    const response = await fetch(url);
+                    
+                    if (!response.ok) {
+                        console.warn('Could not load deadlines:', response.statusText);
+                        return;
+                    }
+                    
+                    const data = await response.json();
+                    
+                    if (data.values && data.values.length > 0) {
+                        const loadedDeadlines = data.values.map(row => ({
+                            name: row[0],
+                            date: row[1],
+                            project: row[2]
+                        }));
+                        setDeadlines(loadedDeadlines.sort((a, b) => new Date(a.date) - new Date(b.date)));
+                    }
+                } catch (error) {
+                    console.warn('Failed to load deadlines:', error);
+                }
+            };
+
+            const saveDeadlinesToSheets = async (deadlinesToSave = deadlines) => {
+                if (!config.appsScriptUrl) {
+                    alert('Please configure Apps Script URL to save deadlines');
+                    return false;
+                }
+                
+                try {
+                    // Send both tasks and deadlines
+                    await fetch(config.appsScriptUrl, {
+                        method: 'POST',
+                        mode: 'no-cors',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            tasks: tasks,
+                            deadlines: deadlinesToSave 
+                        })
+                    });
+                    
+                    // Wait a moment for Google Sheets to process
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    
+                    // Reload deadlines from Google Sheets to confirm sync
+                    await loadDeadlinesFromSheets();
+                    
+                    return true;
+                } catch (error) {
+                    console.error('Error saving deadlines:', error);
+                    return false;
+                }
+            };
+
+            const addDeadline = async () => {
+                if (!newDeadline.name || !newDeadline.date || !newDeadline.project) {
+                    alert('Please fill in all fields');
+                    return;
+                }
+                const updatedDeadlines = [...deadlines, newDeadline].sort((a, b) => new Date(a.date) - new Date(b.date));
+                setDeadlines(updatedDeadlines);
+                
+                // Save with the updated deadlines directly
+                await saveDeadlinesToSheets(updatedDeadlines);
+                
+                setNewDeadline({ name: '', date: '', project: '' });
+                setShowAddDeadline(false);
             };
 
             const saveTasksToSheets = async () => {
@@ -308,7 +386,7 @@ function doPost(e) {
                     parent: null
                 };
                 setTasks([...tasks, task]);
-                setNewTask({ project: '', name: '', startDate: '', endDate: '', hoursNeeded: 0 });
+                setNewTask({ project: '', name: '', startDate: '', endDate: '', hoursNeeded: 0, deadline: '' });
                 setShowAddTask(false);
             };
 
@@ -446,7 +524,7 @@ function doPost(e) {
 
             return (
                 <div className="min-h-screen bg-gray-50 p-6">
-                    <div className="max-w-7xl mx-auto">
+                    <div className={currentView === 'timeline' ? 'w-[90%] mx-auto' : 'max-w-7xl mx-auto'}>
                         <div className="mb-6 flex justify-between items-center">
                             <div>
                                 <h1 className="text-3xl font-bold text-gray-900 mb-2">Semester Project Dashboard</h1>
@@ -541,6 +619,65 @@ function doPost(e) {
                                         </button>
                                         <button
                                             onClick={() => setShowSettings(false)}
+                                            className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {showAddDeadline && (
+                            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                                <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+                                    <h3 className="text-xl font-semibold mb-4">Add New Deadline</h3>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Deadline Name *</label>
+                                            <input
+                                                type="text"
+                                                value={newDeadline.name}
+                                                onChange={(e) => setNewDeadline({ ...newDeadline, name: e.target.value })}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                                                placeholder="e.g., QC Assignment 3"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Date *</label>
+                                            <input
+                                                type="date"
+                                                value={formatDateForInput(newDeadline.date)}
+                                                onChange={(e) => setNewDeadline({ ...newDeadline, date: e.target.value })}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Project *</label>
+                                            <select
+                                                value={newDeadline.project}
+                                                onChange={(e) => setNewDeadline({ ...newDeadline, project: e.target.value })}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                                            >
+                                                <option value="">Select Project</option>
+                                                {uniqueProjects.map(proj => (
+                                                    <option key={proj} value={proj}>{proj}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-3 mt-6">
+                                        <button
+                                            onClick={addDeadline}
+                                            className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                                        >
+                                            Add Deadline
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setShowAddDeadline(false);
+                                                setNewDeadline({ name: '', date: '', project: '' });
+                                            }}
                                             className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
                                         >
                                             Cancel
@@ -811,9 +948,20 @@ function doPost(e) {
                                                 const dateStr = day.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                                                 const isTomorrow = idx === 0;
                                                 
-                                                // Determine border color based on dominant project
+                                                // Check if this day has any deadlines
+                                                const dayDeadlines = deadlines.filter(d => {
+                                                    const dDate = new Date(d.date);
+                                                    dDate.setHours(0, 0, 0, 0);
+                                                    const checkDate = new Date(day.date);
+                                                    checkDate.setHours(0, 0, 0, 0);
+                                                    return dDate.getTime() === checkDate.getTime();
+                                                });
+                                                
+                                                // Determine border color - red for deadlines, otherwise project color
                                                 let borderColor = 'border-gray-300';
-                                                if (day.tasks.length > 0) {
+                                                if (dayDeadlines.length > 0) {
+                                                    borderColor = 'border-red-600';
+                                                } else if (day.tasks.length > 0) {
                                                     const projectCounts = {};
                                                     day.tasks.forEach(t => {
                                                         projectCounts[t.project] = (projectCounts[t.project] || 0) + 1;
@@ -835,7 +983,22 @@ function doPost(e) {
                                                                     ({day.tasks.filter(t => !t.completed).length} tasks)
                                                                 </span>
                                                             )}
+                                                            {dayDeadlines.length > 0 && (
+                                                                <span className="text-xs font-bold text-red-600">
+                                                                    🔴 {dayDeadlines.length} deadline{dayDeadlines.length > 1 ? 's' : ''}
+                                                                </span>
+                                                            )}
                                                         </div>
+                                                        {dayDeadlines.length > 0 && (
+                                                            <div className="mb-3 space-y-1">
+                                                                {dayDeadlines.map((deadline, dIdx) => (
+                                                                    <div key={dIdx} className="p-2 bg-red-50 border border-red-200 rounded">
+                                                                        <p className="text-sm font-bold text-red-900">⚠️ {deadline.name}</p>
+                                                                        <p className="text-xs text-red-700">{deadline.project}</p>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
                                                         {day.tasks.length > 0 ? (
                                                             <div className="space-y-2">
                                                                 {day.tasks.map(task => (
@@ -879,51 +1042,42 @@ function doPost(e) {
 
                                 <div className="bg-white rounded-lg shadow p-6">
                                     <h2 className="text-xl font-semibold text-gray-900 mb-4">Key Deadlines</h2>
-                                    <div className="space-y-2">
-                                        <div className="flex justify-between p-3 bg-blue-50 rounded-lg">
-                                            <span className="font-medium">QC Assignment 3</span>
-                                            <span className="text-blue-700">Jan 30, 2026</span>
+                                    {deadlines.length > 0 ? (
+                                        <div className="space-y-2">
+                                            {deadlines.map((deadline, idx) => {
+                                                const bgColor = projectColors[deadline.project] ? projectColors[deadline.project].replace('bg-', 'bg-').replace('-500', '-50') : 'bg-gray-50';
+                                                const textColor = projectColors[deadline.project] ? projectColors[deadline.project].replace('bg-', 'text-').replace('-500', '-700') : 'text-gray-700';
+                                                
+                                                return (
+                                                    <div key={idx} className={`flex justify-between p-3 ${bgColor} rounded-lg`}>
+                                                        <span className="font-medium">{deadline.name}</span>
+                                                        <span className={textColor}>{formatDate(deadline.date)}</span>
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
-                                        <div className="flex justify-between p-3 bg-blue-50 rounded-lg">
-                                            <span className="font-medium">QC Assignment 4</span>
-                                            <span className="text-blue-700">Feb 9, 2026</span>
-                                        </div>
-                                        <div className="flex justify-between p-3 bg-green-50 rounded-lg">
-                                            <span className="font-medium">AI Individual Assignment 1</span>
-                                            <span className="text-green-700">Feb 23, 2026</span>
-                                        </div>
-                                        <div className="flex justify-between p-3 bg-blue-50 rounded-lg">
-                                            <span className="font-medium">QC Mini Project Presentation</span>
-                                            <span className="text-blue-700">Mar 2, 2026</span>
-                                        </div>
-                                        <div className="flex justify-between p-3 bg-blue-50 rounded-lg">
-                                            <span className="font-medium">QC Mini Project Report</span>
-                                            <span className="text-blue-700">Mar 13, 2026</span>
-                                        </div>
-                                        <div className="flex justify-between p-3 bg-green-50 rounded-lg">
-                                            <span className="font-medium">AI Individual Assignment 2</span>
-                                            <span className="text-green-700">Mar 30, 2026</span>
-                                        </div>
-                                        <div className="flex justify-between p-3 bg-green-50 rounded-lg">
-                                            <span className="font-medium">AI Group Assignment</span>
-                                            <span className="text-green-700">Apr 6, 2026</span>
-                                        </div>
-                                        <div className="flex justify-between p-3 bg-purple-50 rounded-lg">
-                                            <span className="font-medium">Thesis</span>
-                                            <span className="text-purple-700">Apr 10, 2026</span>
-                                        </div>
-                                        <div className="flex justify-between p-3 bg-blue-50 rounded-lg">
-                                            <span className="font-medium">QC Exam</span>
-                                            <span className="text-blue-700">~Apr 27, 2026</span>
-                                        </div>
-                                    </div>
+                                    ) : (
+                                        <p className="text-gray-500 text-sm italic">No deadlines configured</p>
+                                    )}
                                 </div>
                             </div>
                         )}
 
                         {currentView === 'timeline' && (
                             <div className="bg-white rounded-lg shadow p-6">
-                                <h2 className="text-xl font-semibold text-gray-900 mb-6">Gantt Chart View</h2>
+                                <div className="flex items-center justify-between mb-6">
+                                    <h2 className="text-xl font-semibold text-gray-900">Gantt Chart View</h2>
+                                    <button
+                                        onClick={() => setSortByDate(!sortByDate)}
+                                        className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                                            sortByDate 
+                                                ? 'bg-blue-600 text-white' 
+                                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                        }`}
+                                    >
+                                        {sortByDate ? 'Sort by Date' : 'Sort by Project'}
+                                    </button>
+                                </div>
                                 <div className="overflow-x-auto">
                                     <div className="min-w-[1200px]">
                                         <div className="flex border-b pb-2 mb-4">
@@ -935,7 +1089,41 @@ function doPost(e) {
                                                 <div className="flex-1 text-center text-sm font-medium text-gray-600">Apr</div>
                                             </div>
                                         </div>
-                                        {tasks.map(task => {
+                                        <div className="relative">
+                                            {/* Deadline markers */}
+                                            {deadlines.map((deadline, idx) => {
+                                                const deadlineDate = new Date(deadline.date);
+                                                const yearStart = new Date('2026-01-20');
+                                                const yearEnd = new Date('2026-05-01');
+                                                const totalDays = (yearEnd - yearStart) / (1000 * 60 * 60 * 24);
+                                                const deadlineOffset = ((deadlineDate - yearStart) / (1000 * 60 * 60 * 24)) / totalDays * 100;
+                                                
+                                                if (deadlineOffset >= 0 && deadlineOffset <= 100) {
+                                                    return (
+                                                        <div
+                                                            key={`deadline-${idx}`}
+                                                            className="absolute top-0 bottom-0 w-0.5 bg-red-600 pointer-events-none z-10"
+                                                            style={{ left: `calc(16rem + ${deadlineOffset}%)` }}
+                                                        >
+                                                            <div className="absolute -top-1 -left-1.5 w-3 h-3 bg-red-600 rounded-full border-2 border-white"></div>
+                                                            <div className="absolute top-4 left-2 text-xs font-semibold text-red-600 whitespace-nowrap bg-white px-1 rounded">
+                                                                {deadline.name}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                }
+                                                return null;
+                                            })}
+                                        {(sortByDate 
+                                            ? [...tasks].sort((a, b) => new Date(a.startDate) - new Date(b.startDate))
+                                            : [...tasks].sort((a, b) => {
+                                                // Sort by project first, then by start date within each project
+                                                if (a.project !== b.project) {
+                                                    return a.project.localeCompare(b.project);
+                                                }
+                                                return new Date(a.startDate) - new Date(b.startDate);
+                                            })
+                                        ).map(task => {
                                             const start = new Date(task.startDate);
                                             const end = new Date(task.endDate);
                                             const yearStart = new Date('2026-01-20');
@@ -944,23 +1132,41 @@ function doPost(e) {
                                             const startOffset = ((start - yearStart) / (1000 * 60 * 60 * 24)) / totalDays * 100;
                                             const duration = ((end - start) / (1000 * 60 * 60 * 24) + 1) / totalDays * 100;
                                             
+                                            // Ensure project has a color
+                                            const taskColor = projectColors[task.project] || 'bg-gray-500';
+                                            
                                             return (
-                                                <div key={task.id} className="flex items-center mb-2">
-                                                    <div className="w-64 text-sm text-gray-700 truncate pr-2">{task.name}</div>
+                                                <div key={task.id} className="flex items-center mb-2 group">
+                                                    <div className="w-64 text-sm text-gray-700 truncate pr-2">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${taskColor}`}></div>
+                                                            <span>{task.name}</span>
+                                                        </div>
+                                                        {sortByDate && (
+                                                            <span className="text-xs text-gray-500 ml-4">{task.project}</span>
+                                                        )}
+                                                    </div>
                                                     <div className="flex-1 relative h-8">
                                                         <div
-                                                            className={`absolute h-6 rounded ${projectColors[task.project]} ${task.completed ? 'opacity-50' : 'opacity-90'}`}
+                                                            className={`absolute h-6 rounded ${taskColor} ${task.completed ? 'opacity-50' : 'opacity-90'} cursor-pointer hover:opacity-100 transition-opacity`}
                                                             style={{
                                                                 left: `${Math.max(0, startOffset)}%`,
                                                                 width: `${Math.min(100 - startOffset, duration)}%`
                                                             }}
+                                                            title={`${formatDate(task.startDate)} → ${formatDate(task.endDate)} (${task.hoursNeeded}h)`}
                                                         >
                                                             <div className="text-xs text-white px-2 py-1 truncate">{task.hoursNeeded}h</div>
+                                                            <div className="absolute hidden group-hover:block bottom-full left-0 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-lg whitespace-nowrap z-10">
+                                                                <div className="font-semibold">{task.name}</div>
+                                                                <div className="mt-1">{formatDate(task.startDate)} → {formatDate(task.endDate)}</div>
+                                                                <div className="text-gray-300">{task.hoursNeeded} hours • {task.project}</div>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
                                             );
                                         })}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -1041,4 +1247,4 @@ function doPost(e) {
         ReactDOM.render(<ProjectDashboard />, document.getElementById('root'));
     </script>
 </body>
-</html
+</html>
